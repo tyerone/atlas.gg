@@ -1,142 +1,484 @@
+/* ============================================================
+   ATLAS.GG — ENTRY PAGE STYLES
+   Forge Design System v1.1
+   All tokens reference globals.css CSS variables
+============================================================ */
+
+/* ── Layout ── */
 .page {
-  --background: #fafafa;
-  --foreground: #fff;
-
-  --text-primary: #000;
-  --text-secondary: #666;
-
-  --button-primary-hover: #383838;
-  --button-secondary-hover: #f2f2f2;
-  --button-secondary-border: #ebebeb;
-
   display: flex;
-  flex: 1;
   flex-direction: column;
+  min-height: 100vh;
+  background: var(--bg-page);
+  position: relative;
+}
+
+/* Background grid */
+.page::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(79,142,247,0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(79,142,247,0.025) 1px, transparent 1px);
+  background-size: 48px 48px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ── Nav ── */
+.nav {
+  position: relative;
+  z-index: 10;
+  display: flex;
   align-items: center;
-  justify-content: center;
-  font-family: var(--font-geist-sans);
-  background-color: var(--background);
-}
-
-.main {
-  display: flex;
-  flex: 1;
-  width: 100%;
-  max-width: 800px;
-  flex-direction: column;
-  align-items: flex-start;
   justify-content: space-between;
-  background-color: var(--foreground);
-  padding: 120px 60px;
+  padding: 22px 48px;
+  background: var(--bg-surface);
+  border-bottom: 0.5px solid var(--border-default);
 }
 
-.intro {
+.navLogo {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  text-align: left;
-  gap: 24px;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
 }
 
-.intro h1 {
-  max-width: 320px;
-  font-size: 40px;
+.navLogoIcon {
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+}
+
+.navLogoText {
+  font-family: var(--font-logo);
   font-weight: 600;
-  line-height: 48px;
-  letter-spacing: -2.4px;
-  text-wrap: balance;
+  font-size: 22px;
+  color: var(--text-primary);
+  letter-spacing: -0.3px;
+  line-height: 1;
+}
+
+.navLogoText span {
+  color: var(--blue);
+}
+
+.navLinks {
+  display: flex;
+  gap: 32px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.navLinks a {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 16px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  text-transform: capitalize;
+  transition: color 0.15s;
+}
+
+.navLinks a.active,
+.active {
   color: var(--text-primary);
 }
 
-.intro p {
-  max-width: 440px;
+.navLinks a:hover:not(.active) {
+  color: rgba(255,255,255,0.7);
+}
+
+.navUser {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text-accent);
+  background: var(--blue-muted);
+  border: 1px solid var(--blue);
+  border-radius: var(--radius-pill);
+  padding: 7px 18px;
+  white-space: nowrap;
+}
+
+/* ── Main ── */
+.main {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+}
+
+.card {
+  width: 100%;
+  max-width: 460px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  animation: fadeUp 0.45s ease both;
+}
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Eyebrow ── */
+.eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 20px;
+  animation: fadeUp 0.45s 0.05s ease both;
+}
+
+.eyebrowDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--blue);
+  animation: pulse 2.2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.35; transform: scale(0.6); }
+}
+
+.eyebrowText {
+  font-family: var(--font-label);
+  font-weight: 500;
+  font-size: 11px;
+  color: var(--blue);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+/* ── Heading ── */
+.heading {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 38px;
+  color: var(--text-primary);
+  text-align: center;
+  letter-spacing: -0.8px;
+  line-height: 1.15;
+  margin-bottom: 12px;
+  animation: fadeUp 0.45s 0.1s ease both;
+}
+
+.heading span {
+  color: var(--blue);
+}
+
+.subheading {
+  font-family: var(--font-label);
+  font-weight: 400;
+  font-size: 14px;
+  color: var(--text-secondary);
+  text-align: center;
+  line-height: 1.65;
+  max-width: 360px;
+  margin-bottom: 40px;
+  animation: fadeUp 0.45s 0.15s ease both;
+}
+
+/* ── Form ── */
+.form {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  animation: fadeUp 0.45s 0.2s ease both;
+}
+
+/* Input */
+.inputWrap {
+  position: relative;
+  width: 100%;
+  margin-bottom: 10px;
+}
+
+.input {
+  width: 100%;
+  background: var(--bg-input);
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  outline: none;
+  padding: 13px 20px 13px 44px;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 17px;
+  color: var(--text-primary);
+  transition: border-color 0.2s;
+}
+
+.input::placeholder {
+  color: var(--text-muted);
+}
+
+.input:focus {
+  border-color: var(--blue);
+}
+
+.inputError .input {
+  border-color: var(--red);
+}
+
+.inputIcon {
+  position: absolute;
+  left: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  line-height: 0;
+  pointer-events: none;
+  color: var(--text-muted);
+  transition: color 0.15s;
+}
+
+.inputWrap:focus-within .inputIcon {
+  color: var(--blue);
+}
+
+.inputIcon svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* Error */
+.errorMsg {
+  font-family: var(--font-label);
+  font-size: 12px;
+  color: var(--red);
+  margin-bottom: 10px;
+  align-self: flex-start;
+  padding-left: 10px;
+  animation: fadeUp 0.2s ease;
+}
+
+/* Region */
+.regionSection {
+  width: 100%;
+  margin-bottom: 24px;
+}
+
+.regionDivider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.regionLine {
+  flex: 1;
+  height: 0.5px;
+  background: var(--border-default);
+}
+
+.regionLabel {
+  font-family: var(--font-label);
+  font-weight: 500;
+  font-size: 10px;
+  color: var(--text-muted);
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+}
+
+.regionPills {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.regionPill {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 11px;
+  color: var(--text-muted);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-pill);
+  padding: 5px 11px;
+  background: transparent;
+  cursor: pointer;
+  outline: none;
+  user-select: none;
+  transition: all 0.15s;
+}
+
+.regionPill:hover {
+  color: var(--text-secondary);
+  border-color: var(--border-hover);
+}
+
+.regionPillSelected {
+  color: var(--blue);
+  border-color: var(--blue);
+  background: var(--blue-subtle);
+}
+
+/* Connect button */
+.btnConnect {
+  width: 100%;
+  padding: 14px 24px;
+  background: var(--blue);
+  border: none;
+  border-radius: var(--radius-pill);
+  font-family: var(--font-display);
+  font-weight: 600;
   font-size: 18px;
-  line-height: 32px;
-  text-wrap: balance;
+  color: #fff;
+  cursor: pointer;
+  transition: opacity 0.15s, transform 0.1s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 52px;
+}
+
+.btnConnect:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.btnConnect:active:not(:disabled) {
+  transform: scale(0.985);
+}
+
+.btnLoading {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* Spinner */
+.spinner {
+  display: block;
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Hint */
+.hint {
+  font-family: var(--font-label);
+  font-size: 11px;
+  color: var(--text-hint);
+  text-align: center;
+  margin-top: 16px;
+  line-height: 1.9;
+}
+
+.hint em {
+  color: var(--text-muted);
+  font-style: normal;
+}
+
+/* ── Success state ── */
+.successState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  animation: fadeUp 0.4s ease both;
+}
+
+.successIcon {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--blue-muted);
+  border: 1px solid var(--blue);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.successIcon svg {
+  width: 22px;
+  height: 22px;
+}
+
+.successLabel {
+  font-family: var(--font-label);
+  font-size: 13px;
   color: var(--text-secondary);
 }
 
-.intro a {
-  font-weight: 500;
+.successLabel strong {
   color: var(--text-primary);
 }
 
-.ctas {
-  display: flex;
-  flex-direction: row;
-  width: 100%;
-  max-width: 440px;
-  gap: 16px;
-  font-size: 14px;
+.successPill {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--text-accent);
+  background: var(--blue-muted);
+  border: 1px solid var(--blue);
+  border-radius: var(--radius-pill);
+  padding: 8px 20px;
 }
 
-.ctas a {
+.btnNext {
+  margin-top: 6px;
+  padding: 13px 32px;
+  background: transparent;
+  border: 1px solid var(--blue);
+  border-radius: var(--radius-pill);
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 17px;
+  color: var(--blue);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.btnNext:hover {
+  background: var(--blue-subtle);
+}
+
+/* ── Footer ── */
+.footer {
+  position: relative;
+  z-index: 1;
+  padding: 16px 48px;
+  border-top: 0.5px solid var(--border-default);
   display: flex;
   justify-content: center;
-  align-items: center;
-  height: 40px;
-  padding: 0 16px;
-  border-radius: 128px;
-  border: 1px solid transparent;
-  transition: 0.2s;
-  cursor: pointer;
-  width: fit-content;
-  font-weight: 500;
 }
 
-a.primary {
-  background: var(--text-primary);
-  color: var(--background);
-  gap: 8px;
+.footer p {
+  font-family: var(--font-label);
+  font-size: 11px;
+  color: rgba(255,255,255,0.12);
 }
 
-a.secondary {
-  border-color: var(--button-secondary-border);
-}
-
-/* Enable hover only on non-touch devices */
-@media (hover: hover) and (pointer: fine) {
-  a.primary:hover {
-    background: var(--button-primary-hover);
-    border-color: transparent;
+/* ── Responsive ── */
+@media (max-width: 520px) {
+  .nav {
+    padding: 16px 20px;
   }
-
-  a.secondary:hover {
-    background: var(--button-secondary-hover);
-    border-color: transparent;
+  .navLinks {
+    gap: 20px;
   }
-}
-
-@media (max-width: 600px) {
+  .navLinks a {
+    font-size: 14px;
+  }
   .main {
-    padding: 48px 24px;
+    padding: 32px 16px;
   }
-
-  .intro {
-    gap: 16px;
-  }
-
-  .intro h1 {
-    font-size: 32px;
-    line-height: 40px;
-    letter-spacing: -1.92px;
-  }
-}
-
-@media (prefers-color-scheme: dark) {
-  .logo {
-    filter: invert();
-  }
-
-  .page {
-    --background: #000;
-    --foreground: #000;
-
-    --text-primary: #ededed;
-    --text-secondary: #999;
-
-    --button-primary-hover: #ccc;
-    --button-secondary-hover: #1a1a1a;
-    --button-secondary-border: #1a1a1a;
+  .heading {
+    font-size: 28px;
   }
 }
