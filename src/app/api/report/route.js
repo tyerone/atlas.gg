@@ -3,7 +3,6 @@ import {
   RiotApiError,
   clamp,
   colorFromScore,
-  getParticipantCs,
   getRegionalRoute,
   mapParticipantRole,
   msToTimestamp,
@@ -11,6 +10,7 @@ import {
   queueLabelFromId,
   riotFetchJson,
 } from '@/lib/riot';
+import { generateInsightFromContext } from '@/lib/insight-rag';
 
 const PHASES = [
   { label: 'Early', startMs: 0, endMs: 14 * 60 * 1000 },
@@ -21,6 +21,140 @@ const PHASES = [
 const GRID_SIZE = 500;
 const VISION_WINDOW_MS = 90 * 1000;
 const VISION_RADIUS = 1500;
+
+function classifyMapZone(position) {
+  if (!position) {
+    return 'unknown zone';
+  }
+
+  const x = position.x || 0;
+  const y = position.y || 0;
+  const riverBand = Math.abs((x + y) - 14000) <= 1200;
+
+  if (x < 2000 && y < 2000) {
+    return 'blue base';
+  }
+
+  if (x > 12500 && y > 12500) {
+    return 'red base';
+  }
+
+  if (x > 9000 && y < 6000) {
+    return 'bot lane';
+  }
+
+  if (Math.abs(x - y) < 2000) {
+    return 'mid lane';
+  }
+
+  if (x < 6000 && y > 9000) {
+    return 'top lane';
+  }
+
+  if (x > 8000 && y < 8000 && riverBand) {
+    return 'bot river';
+  }
+
+  if (x < 6000 && y > 6000 && riverBand) {
+    return 'top river';
+  }
+
+  if (x < 7000 && y < 8000) {
+    return 'blue jungle';
+  }
+
+  if (x > 7000 && y > 6000) {
+    return 'red jungle';
+  }
+
+  return 'map edge';
+}
+
+function buildPatternFrequency(count, gamesAnalyzed) {
+  if (!gamesAnalyzed) {
+    return '0 of 0 games';
+  }
+
+  const normalized = Math.max(0, Math.min(count, gamesAnalyzed));
+  return `${normalized} of ${gamesAnalyzed} games`;
+}
+
+function getPatternTrend(events, gamesAnalyzed) {
+  if (!events.length || gamesAnalyzed < 3) {
+    return 'stable';
+  }
+
+  const counts = new Array(gamesAnalyzed).fill(0);
+
+  for (const event of events) {
+    const index = Math.max(0, Math.min((event.gameNumber || 1) - 1, gamesAnalyzed - 1));
+    counts[index] += 1;
+  }
+
+  const split = Math.floor(gamesAnalyzed / 2);
+  const early = counts.slice(0, split);
+  const late = counts.slice(split);
+
+  const avgEarly = early.length ? (early.reduce((sum, value) => sum + value, 0) / early.length) : 0;
+  const avgLate = late.length ? (late.reduce((sum, value) => sum + value, 0) / late.length) : 0;
+
+  if (avgLate - avgEarly > 0.4) {
+    return 'worsening';
+  }
+
+  if (avgEarly - avgLate > 0.4) {
+    return 'improving';
+  }
+
+  return 'stable';
+}
+
+function getDominantPhase(events) {
+  if (!events.length) {
+    return 'Mid';
+  }
+
+  const counts = {
+    Early: 0,
+    Mid: 0,
+    Late: 0,
+  };
+
+  for (const event of events) {
+    const label = getPhaseLabel(event.timestampMs || 0);
+    counts[label] += 1;
+  }
+
+  const phaseEntries = Object.entries(counts);
+  phaseEntries.sort((a, b) => b[1] - a[1]);
+  return phaseEntries[0][0];
+}
+
+function buildRagEventFromSample(event, noVision) {
+  if (!event) {
+    return {
+      timestamp: '10:00',
+      deathZone: 'unknown zone',
+      deathCoordinates: null,
+      nearestAllyDistance: null,
+      enemiesNearby: null,
+      visionCoverageAtDeath: noVision.count > 0
+        ? 'inconsistent coverage in prior 90 seconds'
+        : 'coverage unknown',
+    };
+  }
+
+  return {
+    timestamp: msToTimestamp(event.timestampMs),
+    deathZone: classifyMapZone(event.position),
+    deathCoordinates: event.position || null,
+    nearestAllyDistance: null,
+    enemiesNearby: null,
+    visionCoverageAtDeath: noVision.count > 0
+      ? 'multiple deaths with no nearby ward in prior 90 seconds'
+      : 'coverage unknown',
+  };
+}
 
 function getPhaseLabel(timestampMs) {
   if (timestampMs < PHASES[1].startMs) {
@@ -523,36 +657,159 @@ export async function POST(request) {
 
     const role = mostCommon(roleSamples, 'Unknown');
     const queueLabel = mostCommon(queueSamples, 'Ranked Solo');
+    const dominantDeathPhase = getDominantPhase(allDeathEvents);
+    const deathPatternTrend = getPatternTrend(allDeathEvents, gamesAnalyzed);
 
     const objectiveJump = toJumpTarget(allObjectiveEvents[0]);
     const deathJump = toJumpTarget(allDeathEvents[0]);
     const noVisionJump = toJumpTarget(noVision.firstEvent);
     const clusterJump = toJumpTarget(deathCluster.sample);
 
-    let criticalInsight = {
-      text: 'Your lowest phase score is currently limiting your consistency. ',
-      highlight: `${weakestPhase?.label || 'Mid'} phase at ${weakestPhase?.pct || 0}%`,
-      text2: '. Focus on safer resets and objective timing to smooth out this dip.',
-      timestamp: deathJump.timestamp,
-      game: deathJump.game,
-    };
+    const criticalSample = deathCluster.sample || noVision.firstEvent || allDeathEvents[0] || null;
+
+    let criticalPatternType = 'phase_performance';
+    let criticalPatternCount = gamesAnalyzed;
+    let criticalFallback = `${weakestPhase?.label || 'Mid'} phase scored ${weakestPhase?.pct || 0}%. Focus on safer resets and objective timing to smooth out this dip.`;
 
     if (deathCluster.count >= 3) {
-      criticalInsight = {
-        text: 'Your deaths repeatedly cluster in one map zone. We found ',
-        highlight: `${deathCluster.count} deaths in the same area`,
-        text2: ` across ${deathCluster.games} of ${gamesAnalyzed} games. This is your clearest repeatable positioning pattern.`,
-        timestamp: clusterJump.timestamp,
-        game: clusterJump.game,
-      };
+      criticalPatternType = 'death_cluster';
+      criticalPatternCount = deathCluster.games || deathCluster.count;
+      criticalFallback = `Your deaths repeatedly cluster in one map zone: ${deathCluster.count} deaths across ${deathCluster.games} games in ${classifyMapZone(deathCluster.sample?.position)}.`;
     } else if (noVision.count >= 3) {
-      criticalInsight = {
-        text: 'A large share of deaths happened without nearby vision. You had ',
-        highlight: `${noVision.count} deaths in unwarded space`,
-        text2: ' over the selected games. Improving vision discipline should reduce avoidable picks.',
-        timestamp: noVisionJump.timestamp,
-        game: noVisionJump.game,
-      };
+      criticalPatternType = 'deaths_without_vision';
+      criticalPatternCount = noVision.games || noVision.count;
+      criticalFallback = `A large share of deaths happened without nearby vision: ${noVision.count} deaths in unwarded space over selected games.`;
+    }
+
+    const sharedRagContext = {
+      playerRole: role,
+      gamesAnalyzed,
+      gamePhase: dominantDeathPhase,
+      gameContext: {
+        queueType: queueLabel,
+        objectivePresencePct,
+        avgVisionScore,
+        avgDeathsPerGame: Number(avgDeathsPerGame.toFixed(1)),
+        weakestPhase: `${weakestPhase?.label || 'Mid'} (${weakestPhase?.pct || 0}%)`,
+      },
+      crossGamePattern: {
+        deathClusterZone: classifyMapZone(deathCluster.sample?.position),
+        patternPhase: dominantDeathPhase,
+        trend: deathPatternTrend,
+        wardPatternCoveragePct: wardCluster.topThreeCoveragePct,
+      },
+    };
+
+    const objectiveFallback = objectivePresencePct >= 50
+      ? `Good objective involvement at ${objectivePresencePct}% participation.`
+      : `Low objective involvement at ${objectivePresencePct}% participation across selected games.`;
+    const phaseFallback = `${weakestPhase?.label || 'Mid'} phase scored ${weakestPhase?.pct || 0}%. This is currently your weakest segment.`;
+    const noVisionFallback = `${noVision.count} deaths happened with no nearby ward coverage in the prior 90 seconds.`;
+    const wardFallback = `${wardCluster.topThreeCoveragePct}% of wards were placed in your top 3 map cells (${avgWardsPerGame}/game).`;
+    const deathClusterFallback = deathCluster.count > 0
+      ? `${deathCluster.count} deaths landed in your most repeated area across ${deathCluster.games} games.`
+      : 'No dominant death cluster found yet across selected matches.';
+    const deathLoadFallback = `${avgDeathsPerGame.toFixed(1)} deaths per game on average across this sample.`;
+
+    const [
+      criticalGenerated,
+      objectiveGenerated,
+      phaseGenerated,
+      noVisionGenerated,
+      wardGenerated,
+      deathClusterGenerated,
+      deathLoadGenerated,
+    ] = await Promise.all([
+      generateInsightFromContext({
+        contextPacket: {
+          ...sharedRagContext,
+          patternType: criticalPatternType,
+          patternFrequency: buildPatternFrequency(criticalPatternCount, gamesAnalyzed),
+          event: buildRagEventFromSample(criticalSample, noVision),
+        },
+        fallbackText: criticalFallback,
+      }),
+      generateInsightFromContext({
+        contextPacket: {
+          ...sharedRagContext,
+          patternType: 'objective_presence',
+          patternFrequency: buildPatternFrequency(new Set(allObjectiveEvents.map((event) => event.gameNumber)).size, gamesAnalyzed),
+          event: buildRagEventFromSample(allObjectiveEvents[0], noVision),
+        },
+        fallbackText: objectiveFallback,
+      }),
+      generateInsightFromContext({
+        contextPacket: {
+          ...sharedRagContext,
+          patternType: 'phase_performance',
+          patternFrequency: buildPatternFrequency(gamesAnalyzed, gamesAnalyzed),
+          event: buildRagEventFromSample(criticalSample, noVision),
+        },
+        fallbackText: phaseFallback,
+      }),
+      generateInsightFromContext({
+        contextPacket: {
+          ...sharedRagContext,
+          patternType: 'deaths_without_vision',
+          patternFrequency: buildPatternFrequency(noVision.games || noVision.count, gamesAnalyzed),
+          event: buildRagEventFromSample(noVision.firstEvent, noVision),
+        },
+        fallbackText: noVisionFallback,
+      }),
+      generateInsightFromContext({
+        contextPacket: {
+          ...sharedRagContext,
+          patternType: 'ward_clustering',
+          patternFrequency: buildPatternFrequency(wardCluster.games || 0, gamesAnalyzed),
+          event: buildRagEventFromSample(wardCluster.sample, noVision),
+        },
+        fallbackText: wardFallback,
+      }),
+      generateInsightFromContext({
+        contextPacket: {
+          ...sharedRagContext,
+          patternType: 'death_cluster',
+          patternFrequency: buildPatternFrequency(deathCluster.games || deathCluster.count, gamesAnalyzed),
+          event: buildRagEventFromSample(deathCluster.sample, noVision),
+        },
+        fallbackText: deathClusterFallback,
+      }),
+      generateInsightFromContext({
+        contextPacket: {
+          ...sharedRagContext,
+          patternType: 'overextension',
+          patternFrequency: buildPatternFrequency(new Set(allDeathEvents.map((event) => event.gameNumber)).size, gamesAnalyzed),
+          event: buildRagEventFromSample(allDeathEvents[0], noVision),
+        },
+        fallbackText: deathLoadFallback,
+      }),
+    ]);
+
+    const criticalJump = toJumpTarget(criticalSample || allDeathEvents[0]);
+
+    const criticalInsight = {
+      text: criticalGenerated.text,
+      highlight: '',
+      text2: '',
+      timestamp: criticalJump.timestamp,
+      game: criticalJump.game,
+    };
+
+    const ragSources = [
+      criticalGenerated.source,
+      objectiveGenerated.source,
+      phaseGenerated.source,
+      noVisionGenerated.source,
+      wardGenerated.source,
+      deathClusterGenerated.source,
+      deathLoadGenerated.source,
+    ];
+
+    let ragMode = 'retrieval-fallback';
+    if (ragSources.includes('anthropic-rag')) {
+      ragMode = 'anthropic-rag';
+    } else if (ragSources.includes('openai-rag')) {
+      ragMode = 'openai-rag';
     }
 
     const report = {
@@ -589,15 +846,13 @@ export async function POST(request) {
           cards: [
             {
               title: 'Objective presence',
-              text: objectivePresencePct >= 50
-                ? `Good objective involvement at ${objectivePresencePct}% participation.`
-                : `Low objective involvement at ${objectivePresencePct}% participation across selected games.`,
+              text: objectiveGenerated.text,
               timestamp: objectiveJump.timestamp,
               game: objectiveJump.game,
             },
             {
               title: `${weakestPhase?.label || 'Mid'} phase drop`,
-              text: `${weakestPhase?.label || 'Mid'} phase scored ${weakestPhase?.pct || 0}%. This is currently your weakest segment.`,
+              text: phaseGenerated.text,
               timestamp: criticalInsight.timestamp,
               game: criticalInsight.game,
             },
@@ -610,13 +865,13 @@ export async function POST(request) {
           cards: [
             {
               title: 'Deaths without vision',
-              text: `${noVision.count} deaths happened with no nearby ward coverage in the prior 90 seconds.`,
+              text: noVisionGenerated.text,
               timestamp: noVisionJump.timestamp,
               game: noVisionJump.game,
             },
             {
               title: 'Ward clustering',
-              text: `${wardCluster.topThreeCoveragePct}% of wards were placed in your top 3 map cells (${avgWardsPerGame}/game).`,
+              text: wardGenerated.text,
               timestamp: objectiveJump.timestamp,
               game: objectiveJump.game,
             },
@@ -629,21 +884,23 @@ export async function POST(request) {
           cards: [
             {
               title: 'Death clustering',
-              text: deathCluster.count > 0
-                ? `${deathCluster.count} deaths landed in your most repeated area across ${deathCluster.games} games.`
-                : 'No dominant death cluster found yet across selected matches.',
+              text: deathClusterGenerated.text,
               timestamp: clusterJump.timestamp,
               game: clusterJump.game,
             },
             {
               title: 'Death load',
-              text: `${avgDeathsPerGame.toFixed(1)} deaths per game on average across this sample.`,
+              text: deathLoadGenerated.text,
               timestamp: deathJump.timestamp,
               game: deathJump.game,
             },
           ],
         },
       ],
+      rag: {
+        mode: ragMode,
+        sources: ragSources,
+      },
     };
 
     return NextResponse.json({
