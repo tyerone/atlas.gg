@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import AtlasLogo from '@/components/AtlasLogo';
 import styles from './page.module.css';
@@ -23,45 +24,38 @@ export default function EntryPage() {
   async function handleConnect() {
     setError('');
 
-    if (riotId && !validateRiotId(riotId)) {
+    if (!riotId.trim()) {
+      setError('Enter your Riot ID in the format Playername#TAG');
+      return;
+    }
+
+    if (!validateRiotId(riotId)) {
       setError('Invalid format — use Playername#TAG (e.g. Atlas#NA1)');
       return;
     }
 
-    const id = riotId.trim() || 'Playername#NA1';
+    const id = riotId.trim();
     setLoading(true);
 
     try {
-      /*
-        BACKEND INTEGRATION — replace this block with your real API call:
+      const response = await fetch('/api/connect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ riotId: id, region }),
+      });
 
-        const res = await fetch('/api/connect', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ riotId: id, region }),
-        });
-        const data = await res.json();
+      const data = await response.json();
 
-        if (data.success) {
-          sessionStorage.setItem('atlas_puuid', data.puuid);
-          sessionStorage.setItem('atlas_riot_id', id);
-          sessionStorage.setItem('atlas_region', region);
-          setConnectedId(id);
-          setConnected(true);
-        } else {
-          setError(data.message || 'Riot ID not found. Check your tag and region.');
-        }
+      if (!response.ok || !data.success) {
+        setError(data.message || 'Riot ID not found. Check your tag and region.');
+        return;
+      }
 
-        RIOT API ENDPOINT (call server-side, never expose key to client):
-        GET https://{region}.api.riotgames.com/riot/account/v1/accounts/by-riot-id/{gameName}/{tagLine}
-        Header: X-Riot-Token: YOUR_API_KEY
-      */
+      sessionStorage.setItem('atlas_puuid', data.puuid);
+      sessionStorage.setItem('atlas_riot_id', data.riotId || id);
+      sessionStorage.setItem('atlas_region', data.platformRegion || region);
 
-      // MOCK — remove when backend is ready
-      await new Promise((resolve) => setTimeout(resolve, 1200));
-      sessionStorage.setItem('atlas_riot_id', id);
-      sessionStorage.setItem('atlas_region', region);
-      setConnectedId(id);
+      setConnectedId(data.riotId || id);
       setConnected(true);
 
     } catch {
@@ -87,17 +81,17 @@ export default function EntryPage() {
 
       {/* ── NAV ── */}
       <nav className={styles.nav}>
-        <a href="/" className={styles.navLogo} aria-label="Atlas.gg home">
+        <Link href="/" className={styles.navLogo} aria-label="Atlas.gg home">
           <AtlasLogo width={26} height={23} />
           <span className={styles.navLogoText}>
             atlas.<span>gg</span>
           </span>
-        </a>
+        </Link>
 
         <ul className={styles.navLinks}>
-          <li><a href="/" className={styles.active}>Connect</a></li>
-          <li><a href="/matches">Matches</a></li>
-          <li><a href="/report">Report</a></li>
+          <li><Link href="/" className={styles.active}>Connect</Link></li>
+          <li><Link href="/matches">Matches</Link></li>
+          <li><Link href="/report">Report</Link></li>
         </ul>
 
         {connected && (

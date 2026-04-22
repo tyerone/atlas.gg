@@ -1,12 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import AtlasLogo from '@/components/AtlasLogo';
 import styles from './report.module.css';
 
 // ─── MOCK DATA ───────────────────────────────────────────────
-const MOCK_REPORT = {
+const FALLBACK_REPORT = {
   riotId: 'Playername#NA1',
   role: 'ADC',
   gamesAnalyzed: 5,
@@ -71,58 +72,123 @@ export default function ReportPage() {
   const [stepsDone, setStepsDone]   = useState([]);
   const [progress, setProgress]     = useState(0);
   const [activePhase, setActivePhase] = useState('All');
-  const [riotId, setRiotId]         = useState('Playername#NA1');
+  const [riotId] = useState(
+    () => (typeof window !== 'undefined' ? (sessionStorage.getItem('atlas_riot_id') || 'Playername#NA1') : 'Playername#NA1'),
+  );
+  const [reportData, setReportData] = useState(null);
+  const [processingError, setProcessingError] = useState('');
 
-  useEffect(() => {
-    const id = sessionStorage.getItem('atlas_riot_id') || 'Playername#NA1';
-    setRiotId(id);
-    runProcessing();
-  }, []);
+  async function fetchReportPayload() {
+    const puuid = sessionStorage.getItem('atlas_puuid');
+    const region = sessionStorage.getItem('atlas_region') || 'NA1';
+    const selectedRaw = sessionStorage.getItem('atlas_selected_matches') || '[]';
 
-  function runProcessing() {
-    /*
-      BACKEND INTEGRATION:
-      const matchIds = JSON.parse(sessionStorage.getItem('atlas_selected_matches') || '[]');
-      fetch('/api/report', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          matchIds,
-          puuid: sessionStorage.getItem('atlas_puuid'),
-          region: sessionStorage.getItem('atlas_region'),
-        }),
-      })
-      .then(r => r.json())
-      .then(data => {
-        sessionStorage.setItem('atlas_report', JSON.stringify(data));
-        setPhase('report');
+    let matchIds = [];
+
+    try {
+      matchIds = JSON.parse(selectedRaw);
+    } catch {
+      matchIds = [];
+    }
+
+    if (!puuid) {
+      throw new Error('Missing Riot account session. Connect your Riot ID first.');
+    }
+
+    if (!Array.isArray(matchIds) || matchIds.length < 2) {
+      throw new Error('Select at least 2 matches before generating a report.');
+    }
+
+    const response = await fetch('/api/report', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        matchIds,
+        puuid,
+        region,
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok || !data.success) {
+      throw new Error(data.message || 'Could not generate a report from Riot data.');
+    }
+
+    sessionStorage.setItem('atlas_report', JSON.stringify(data.report));
+    return data.report;
+  }
+
+  function animateProcessingSteps() {
+    return new Promise((resolve) => {
+      let elapsed = 0;
+
+      STEP_DURATIONS.forEach((dur, idx) => {
+        setTimeout(() => {
+          setCurrentStep(idx);
+
+          const startPct = STEP_DURATIONS.slice(0, idx).reduce((a, b) => a + b, 0) / TOTAL_DUR * 100;
+          const endPct = STEP_DURATIONS.slice(0, idx + 1).reduce((a, b) => a + b, 0) / TOTAL_DUR * 100;
+          const startTime = Date.now();
+
+          const tick = () => {
+            const t = Math.min((Date.now() - startTime) / dur, 1);
+            setProgress(startPct + ((endPct - startPct) * t));
+
+            if (t < 1) {
+              requestAnimationFrame(tick);
+            } else {
+              setStepsDone((prev) => [...prev, idx]);
+
+              if (idx === STEP_DURATIONS.length - 1) {
+                setTimeout(resolve, 450);
+              }
+            }
+          };
+
+          requestAnimationFrame(tick);
+        }, elapsed);
+
+        elapsed += dur;
       });
-    */
-
-    let elapsed = 0;
-    STEP_DURATIONS.forEach((dur, idx) => {
-      setTimeout(() => {
-        setCurrentStep(idx);
-        const startPct = STEP_DURATIONS.slice(0, idx).reduce((a, b) => a + b, 0) / TOTAL_DUR * 100;
-        const endPct   = STEP_DURATIONS.slice(0, idx + 1).reduce((a, b) => a + b, 0) / TOTAL_DUR * 100;
-        const startTime = Date.now();
-        const tick = () => {
-          const t = Math.min((Date.now() - startTime) / dur, 1);
-          setProgress(startPct + (endPct - startPct) * t);
-          if (t < 1) requestAnimationFrame(tick);
-          else {
-            setStepsDone(prev => [...prev, idx]);
-            if (idx === STEP_DURATIONS.length - 1) setTimeout(() => setPhase('report'), 500);
-          }
-        };
-        requestAnimationFrame(tick);
-      }, elapsed);
-      elapsed += dur;
     });
   }
 
+  async function runProcessing() {
+    setPhase('processing');
+    setProgress(0);
+    setCurrentStep(0);
+    setStepsDone([]);
+    setProcessingError('');
+
+    const reportPromise = fetchReportPayload();
+
+    await animateProcessingSteps();
+
+    try {
+      const computedReport = await reportPromise;
+      setReportData(computedReport);
+      setPhase('report');
+    } catch (error) {
+      setProcessingError(error.message || 'Could not generate report.');
+      setPhase('error');
+    }
+  }
+
+  useEffect(() => {
+    const timerId = setTimeout(() => {
+      void runProcessing();
+    }, 0);
+
+    return () => {
+      clearTimeout(timerId);
+    };
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const gameName = riotId.split('#')[0];
-  const tag      = riotId.split('#')[1];
+  const tag      = riotId.split('#')[1] || 'TAG';
   const circumference = 2 * Math.PI * 26;
 
   // ── PROCESSING ────────────────────────────────────────────
@@ -130,14 +196,14 @@ export default function ReportPage() {
     return (
       <div className={styles.page}>
         <nav className={styles.nav}>
-          <a href="/" className={styles.navLogo}>
+          <Link href="/" className={styles.navLogo}>
             <AtlasLogo width={26} height={23} />
             <span className={styles.navLogoText}>atlas.<span>gg</span></span>
-          </a>
+          </Link>
           <ul className={styles.navLinks}>
-            <li><a href="/">Connect</a></li>
-            <li><a href="/matches">Matches</a></li>
-            <li><a href="/report" className={styles.active}>Report</a></li>
+            <li><Link href="/">Connect</Link></li>
+            <li><Link href="/matches">Matches</Link></li>
+            <li><Link href="/report" className={styles.active}>Report</Link></li>
           </ul>
           <div className={styles.navUser}>{riotId}</div>
         </nav>
@@ -197,20 +263,57 @@ export default function ReportPage() {
     );
   }
 
+  if (phase === 'error') {
+    return (
+      <div className={styles.page}>
+        <nav className={styles.nav}>
+          <Link href="/" className={styles.navLogo}>
+            <AtlasLogo width={26} height={23} />
+            <span className={styles.navLogoText}>atlas.<span>gg</span></span>
+          </Link>
+          <ul className={styles.navLinks}>
+            <li><Link href="/">Connect</Link></li>
+            <li><Link href="/matches">Matches</Link></li>
+            <li><Link href="/report" className={styles.active}>Report</Link></li>
+          </ul>
+          <div className={styles.navUser}>{riotId}</div>
+        </nav>
+
+        <main className={styles.processingMain}>
+          <div className={styles.processingCard}>
+            <h2 className={styles.processingTitle}>Could not generate report</h2>
+            <p className={styles.pStepText}>{processingError}</p>
+            <button
+              className={styles.btnDrillDown}
+              onClick={() => router.push('/matches')}
+              type="button"
+            >
+              Back to match selection →
+            </button>
+          </div>
+        </main>
+
+        <footer className={styles.footer}>
+          <p>atlas.gg &mdash; spatial replay analysis &mdash; stormforge 2026 &mdash; not endorsed by riot games</p>
+        </footer>
+      </div>
+    );
+  }
+
   // ── REPORT ───────────────────────────────────────────────
-  const r = MOCK_REPORT;
+  const r = reportData || FALLBACK_REPORT;
 
   return (
     <div className={styles.page}>
       <nav className={styles.nav}>
-        <a href="/" className={styles.navLogo}>
+        <Link href="/" className={styles.navLogo}>
           <AtlasLogo width={26} height={23} />
           <span className={styles.navLogoText}>atlas.<span>gg</span></span>
-        </a>
+        </Link>
         <ul className={styles.navLinks}>
-          <li><a href="/">Connect</a></li>
-          <li><a href="/matches">Matches</a></li>
-          <li><a href="/report" className={styles.active}>Report</a></li>
+          <li><Link href="/">Connect</Link></li>
+          <li><Link href="/matches">Matches</Link></li>
+          <li><Link href="/report" className={styles.active}>Report</Link></li>
         </ul>
         <div className={styles.navUser}>{riotId}</div>
       </nav>
@@ -228,7 +331,7 @@ export default function ReportPage() {
               {gameName}<span className={styles.reportTag}>#{tag}</span>
             </h1>
             <p className={styles.reportMeta}>
-              {r.role} &nbsp;·&nbsp; <span>{r.gamesAnalyzed} replays</span> &nbsp;·&nbsp; Ranked Solo
+              {r.role} &nbsp;·&nbsp; <span>{r.gamesAnalyzed} replays</span> &nbsp;·&nbsp; {r.queueLabel || 'Ranked Solo'}
             </p>
           </div>
           <div className={styles.gamesPill}>{r.gamesAnalyzed} games analyzed</div>

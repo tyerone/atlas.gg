@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import AtlasLogo from '@/components/AtlasLogo';
 import styles from './matches.module.css';
@@ -35,20 +36,6 @@ function getDDragonName(champion) {
   return CHAMP_NAME_MAP[champion] || champion.replace(/\s/g, '').replace(/['.]/g, '');
 }
 
-// ─── MOCK DATA ───────────────────────────────────────────────
-const MOCK_MATCHES = [
-  { id: 'NA1-5823901234', champion: 'Jinx',      role: 'ADC',     result: 'Win',  duration: '32m', kda: '8/3/11',  cs: 234, queue: 'Ranked Solo' },
-  { id: 'NA1-5823891122', champion: 'Jinx',      role: 'ADC',     result: 'Loss', duration: '28m', kda: '3/8/4',   cs: 187, queue: 'Ranked Solo' },
-  { id: 'NA1-5823801045', champion: 'Caitlyn',   role: 'ADC',     result: 'Win',  duration: '41m', kda: '12/4/7',  cs: 301, queue: 'Ranked Solo' },
-  { id: 'NA1-5823756789', champion: 'Jinx',      role: 'ADC',     result: 'Loss', duration: '24m', kda: '2/6/3',   cs: 143, queue: 'Ranked Solo' },
-  { id: 'NA1-5823698234', champion: 'Jinx',      role: 'ADC',     result: 'Win',  duration: '35m', kda: '9/2/14',  cs: 267, queue: 'Ranked Solo' },
-  { id: 'NA1-5823645001', champion: 'Xayah',     role: 'ADC',     result: 'Win',  duration: '38m', kda: '7/4/9',   cs: 245, queue: 'Ranked Solo' },
-  { id: 'NA1-5823590112', champion: 'Caitlyn',   role: 'ADC',     result: 'Loss', duration: '22m', kda: '1/7/2',   cs: 112, queue: 'Flex'        },
-  { id: 'NA1-5823534567', champion: 'Jinx',      role: 'ADC',     result: 'Win',  duration: '29m', kda: '6/3/8',   cs: 198, queue: 'Ranked Solo' },
-  { id: 'NA1-5823478923', champion: 'Jhin',      role: 'ADC',     result: 'Loss', duration: '33m', kda: '4/5/6',   cs: 221, queue: 'Ranked Solo' },
-  { id: 'NA1-5823412345', champion: 'Jinx',      role: 'ADC',     result: 'Win',  duration: '27m', kda: '11/1/6',  cs: 189, queue: 'Flex'        },
-];
-
 const ROLES    = ['All', 'Top', 'Jungle', 'Mid', 'ADC', 'Support'];
 const QUEUES   = ['All', 'Ranked Solo', 'Flex'];
 const MAX_MATCHES = 10;
@@ -82,7 +69,9 @@ function ChampIcon({ champion, patch }) {
 // ─── PAGE ────────────────────────────────────────────────────
 export default function MatchesPage() {
   const router = useRouter();
-  const [riotId, setRiotId]           = useState('');
+  const [riotId] = useState(
+    () => (typeof window !== 'undefined' ? (sessionStorage.getItem('atlas_riot_id') || 'Not connected') : 'Not connected'),
+  );
   const [patch, setPatch]             = useState('14.8.1'); // fallback patch
   const [matches, setMatches]         = useState([]);
   const [selected, setSelected]       = useState([]);
@@ -91,39 +80,64 @@ export default function MatchesPage() {
   const [champion, setChampion]       = useState('');
   const [loading, setLoading]         = useState(true);
   const [analyzing, setAnalyzing]     = useState(false);
+  const [error, setError]             = useState('');
 
   useEffect(() => {
-    const id = sessionStorage.getItem('atlas_riot_id') || 'Playername#NA1';
-    setRiotId(id);
+    const puuid = sessionStorage.getItem('atlas_puuid');
+    const region = sessionStorage.getItem('atlas_region') || 'NA1';
 
-    // Fetch latest patch version from Data Dragon
     fetch('https://ddragon.leagueoflegends.com/api/versions.json')
-      .then(r => r.json())
-      .then(versions => setPatch(versions[0]))
-      .catch(() => {}); // keep fallback if fetch fails
+      .then((r) => r.json())
+      .then((versions) => setPatch(versions[0]))
+      .catch(() => {});
 
-    /*
-      BACKEND INTEGRATION — replace mock with real API call:
+    if (!puuid) {
+      setTimeout(() => {
+        setError('No connected Riot account found. Go back to Connect first.');
+        setLoading(false);
+      }, 0);
+      return;
+    }
 
-      fetch(`/api/matches?puuid=${sessionStorage.getItem('atlas_puuid')}&region=${sessionStorage.getItem('atlas_region')}`)
-        .then(r => r.json())
-        .then(data => {
-          setMatches(data.matches);
+    let cancelled = false;
+
+    async function loadMatches() {
+      try {
+        setError('');
+        const response = await fetch(
+          `/api/matches?puuid=${encodeURIComponent(puuid)}&region=${encodeURIComponent(region)}&count=10`,
+        );
+        const data = await response.json();
+
+        if (!response.ok || !data.success) {
+          if (!cancelled) {
+            setError(data.message || 'Could not load matches from Riot API.');
+            setMatches([]);
+          }
+          return;
+        }
+
+        if (!cancelled) {
+          setMatches(data.matches || []);
+          sessionStorage.setItem('atlas_recent_matches', JSON.stringify(data.matches || []));
+        }
+      } catch {
+        if (!cancelled) {
+          setError('Failed to load matches. Please try again.');
+          setMatches([]);
+        }
+      } finally {
+        if (!cancelled) {
           setLoading(false);
-        });
+        }
+      }
+    }
 
-      RIOT API ENDPOINTS (call server-side):
-      1. GET https://{regional}.api.riotgames.com/lol/match/v5/matches/by-puuid/{puuid}/ids
-         ?queue=420&count=20
-      2. For each matchId:
-         GET https://{regional}.api.riotgames.com/lol/match/v5/matches/{matchId}
-    */
+    loadMatches();
 
-    // MOCK — simulate API load
-    setTimeout(() => {
-      setMatches(MOCK_MATCHES);
-      setLoading(false);
-    }, 800);
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const filtered = matches.filter(m => {
@@ -144,22 +158,9 @@ export default function MatchesPage() {
   async function handleAnalyze() {
     if (selected.length < 2) return;
     setAnalyzing(true);
-
-    /*
-      BACKEND INTEGRATION:
-      await fetch('/api/analyze', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          matchIds: selected,
-          puuid: sessionStorage.getItem('atlas_puuid'),
-          region: sessionStorage.getItem('atlas_region'),
-        }),
-      });
-    */
-
-    await new Promise(r => setTimeout(r, 600));
+    const selectedDetails = matches.filter((match) => selected.includes(match.id));
     sessionStorage.setItem('atlas_selected_matches', JSON.stringify(selected));
+    sessionStorage.setItem('atlas_selected_match_details', JSON.stringify(selectedDetails));
     router.push('/report');
   }
 
@@ -168,14 +169,14 @@ export default function MatchesPage() {
 
       {/* ── NAV ── */}
       <nav className={styles.nav}>
-        <a href="/" className={styles.navLogo} aria-label="Atlas.gg home">
+        <Link href="/" className={styles.navLogo} aria-label="Atlas.gg home">
           <AtlasLogo width={26} height={23} />
           <span className={styles.navLogoText}>atlas.<span>gg</span></span>
-        </a>
+        </Link>
         <ul className={styles.navLinks}>
-          <li><a href="/">Connect</a></li>
-          <li><a href="/matches" className={styles.active}>Matches</a></li>
-          <li><a href="/report">Report</a></li>
+          <li><Link href="/">Connect</Link></li>
+          <li><Link href="/matches" className={styles.active}>Matches</Link></li>
+          <li><Link href="/report">Report</Link></li>
         </ul>
         <div className={styles.navUser}>{riotId}</div>
       </nav>
@@ -306,7 +307,11 @@ export default function MatchesPage() {
 
         {/* Match list */}
         <div className={styles.matchList}>
-          {loading ? (
+          {error ? (
+            <div className={styles.emptyState}>
+              <p>{error}</p>
+            </div>
+          ) : loading ? (
             <div className={styles.loadingState}>
               <span className={styles.loadingSpinner} />
               <p>Loading your match history...</p>

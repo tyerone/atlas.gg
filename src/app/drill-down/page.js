@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import AtlasLogo from '@/components/AtlasLogo';
 import styles from './drill-down.module.css';
 
@@ -98,19 +99,22 @@ const TAB_KEYS   = ['positioning', 'vision', 'macro'];
 
 export default function DrillDownPage() {
   const router       = useRouter();
-  const searchParams = useSearchParams();
-  const [riotId, setRiotId]         = useState('Playername#NA1');
+  const [riotId] = useState(
+    () => (typeof window !== 'undefined' ? (sessionStorage.getItem('atlas_riot_id') || 'Playername#NA1') : 'Playername#NA1'),
+  );
   const [activeTab, setActiveTab]   = useState(0);
   const [snapshot, setSnapshot]     = useState(null);
   const [snapshotTs, setSnapshotTs] = useState('');
 
   useEffect(() => {
-    const id  = sessionStorage.getItem('atlas_riot_id') || 'Playername#NA1';
-    const ts  = searchParams.get('ts');
-    setRiotId(id);
+    const ts = new URLSearchParams(window.location.search).get('ts');
 
     // If arriving from a specific timestamp link, pre-open that snapshot
-    if (ts) openSnapshot(ts);
+    if (ts) {
+      setTimeout(() => {
+        openSnapshot(ts);
+      }, 0);
+    }
   }, []);
 
   function openSnapshot(ts) {
@@ -144,14 +148,14 @@ export default function DrillDownPage() {
 
       {/* ── NAV ── */}
       <nav className={styles.nav}>
-        <a href="/" className={styles.navLogo} aria-label="Atlas.gg home">
+        <Link href="/" className={styles.navLogo} aria-label="Atlas.gg home">
           <AtlasLogo width={26} height={23} />
           <span className={styles.navLogoText}>atlas.<span>gg</span></span>
-        </a>
+        </Link>
         <ul className={styles.navLinks}>
-          <li><a href="/">Connect</a></li>
-          <li><a href="/matches">Matches</a></li>
-          <li><a href="/report" className={styles.active}>Report</a></li>
+          <li><Link href="/">Connect</Link></li>
+          <li><Link href="/matches">Matches</Link></li>
+          <li><Link href="/report" className={styles.active}>Report</Link></li>
         </ul>
         <div className={styles.navUser}>{riotId}</div>
       </nav>
