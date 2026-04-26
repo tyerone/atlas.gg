@@ -389,7 +389,21 @@ export default function ReportPage() {
             </div>
             <div className={styles.mapCanvas}>
               <svg width="100%" height="100%" viewBox="0 0 520 210" preserveAspectRatio="xMidYMid meet">
+                {/* 1. Dark base */}
                 <rect width="520" height="210" fill="#0d1117" />
+                {/* 2. Map image top of base */}
+                <image
+                  href="/map.png"
+                  x="8"
+                  y="8"
+                  width="504"
+                  height="194"
+                  preserveAspectRatio="xMidYMid slice"
+                  opacity="0.35"
+                />
+                {/* 3. Dark overlay to keep contrast */}
+                <rect x="8" y="8" width="504" height="194" rx="5" fill="rgba(13,17,23,0.55)" />
+                  {/* 4. Border */}
                 <rect x="8" y="8" width="504" height="194" rx="5" fill="none" stroke="rgba(255,255,255,0.04)" strokeWidth="0.5" />
                 <line x1="8" y1="202" x2="512" y2="8" stroke="rgba(79,142,247,0.06)" strokeWidth="12" />
                 <circle cx="310" cy="115" r="30" fill="rgba(226,75,74,0.22)" />

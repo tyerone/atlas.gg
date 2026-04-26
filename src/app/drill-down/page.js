@@ -98,18 +98,17 @@ const TAB_LABELS = ['Positioning', 'Vision', 'Macro'];
 const TAB_KEYS   = ['positioning', 'vision', 'macro'];
 
 export default function DrillDownPage() {
-  const router       = useRouter();
-  const [riotId] = useState(
-    () => (typeof window !== 'undefined' ? (sessionStorage.getItem('atlas_riot_id') || 'Playername#NA1') : 'Playername#NA1'),
-  );
+  const router = useRouter();
+  const [riotId, setRiotId] = useState('Playername#NA1');
   const [activeTab, setActiveTab]   = useState(0);
   const [snapshot, setSnapshot]     = useState(null);
   const [snapshotTs, setSnapshotTs] = useState('');
 
   useEffect(() => {
-    const ts = new URLSearchParams(window.location.search).get('ts');
+    const stored = sessionStorage.getItem('atlas_riot_id');
+    if (stored) setRiotId(stored);
 
-    // If arriving from a specific timestamp link, pre-open that snapshot
+    const ts = new URLSearchParams(window.location.search).get('ts');
     if (ts) {
       setTimeout(() => {
         openSnapshot(ts);
@@ -217,7 +216,21 @@ export default function DrillDownPage() {
             </div>
             <div className={styles.mapCanvas}>
               <svg width="100%" height="100%" viewBox="0 0 300 240" preserveAspectRatio="xMidYMid meet">
+                {/* 1. Dark base */}
                 <rect width="300" height="240" fill="#0d1117" />
+                {/* 2. Map image */}
+                <image
+                  href="/map.png"
+                  x="8"
+                  y="8"
+                  width="284"
+                  height="224"
+                  preserveAspectRatio="xMidYMid slice"
+                  opacity="0.35"
+                />
+                {/* 3. Dark overlay */}
+                <rect x="8" y="8" width="284" height="224" rx="5" fill="rgba(13,17,23,0.55)" />
+                {/* 4. Border */}
                 <rect x="8" y="8" width="284" height="224" rx="5" fill="none" stroke="rgba(255,255,255,0.04)" strokeWidth="0.5" />
                 {/* River */}
                 <line x1="8" y1="232" x2="292" y2="8" stroke="rgba(79,142,247,0.06)" strokeWidth="10" />
