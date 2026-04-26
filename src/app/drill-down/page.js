@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import AtlasLogo from '@/components/AtlasLogo';
 import styles from './drill-down.module.css';
+import { Suspense } from 'react';
 
 const TAB_LABELS = ['Positioning', 'Vision', 'Macro'];
 const TAB_KEYS   = ['positioning', 'vision', 'macro'];
@@ -80,7 +81,7 @@ function GameMap({ snapshot, allGame }) {
 }
 
 // ─── PAGE ─────────────────────────────────────────────────────
-export default function DrillDownPage() {
+function DrillDownContent() {
   const router       = useRouter();
   const searchParams = useSearchParams();
 
@@ -383,6 +384,14 @@ export default function DrillDownPage() {
         <p>atlas.gg &mdash; spatial replay analysis &mdash; stormforge 2026 &mdash; not endorsed by riot games</p>
       </footer>
     </div>
+  );
+}
+
+export default function DrillDownPage() {
+  return (
+    <Suspense fallback={<div>Loading Page...</div>}>
+      <DrillDownContent />
+    </Suspense>
   );
 }
 
