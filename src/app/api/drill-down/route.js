@@ -224,13 +224,6 @@ export async function GET(request) {
         }
       }
     }
-
-    console.log('participant id:', participant.participantId);
-  console.log('deaths:', deaths.length);
-  console.log('wards:', wards.length);
-  console.log('objectives:', objectiveEvents.length);
-  console.log('timeline frames sample:', JSON.stringify(frames[10]?.participantFrames, null, 2));
-
     // CS per phase
     for (const phase of PHASES) {
       const startMs = phase.startMs;
