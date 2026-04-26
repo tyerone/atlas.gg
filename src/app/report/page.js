@@ -82,7 +82,6 @@ export default function ReportPage() {
     const puuid = sessionStorage.getItem('atlas_puuid');
     const region = sessionStorage.getItem('atlas_region') || 'NA1';
     const selectedRaw = sessionStorage.getItem('atlas_selected_matches') || '[]';
-    
 
     let matchIds = [];
 
@@ -111,7 +110,6 @@ export default function ReportPage() {
     });
 
     const data = await response.json();
-    console.log('report response:', data);
 
     if (!response.ok || !data.success) {
       throw new Error(data.message || 'Could not generate a report from Riot data.');

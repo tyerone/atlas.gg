@@ -135,7 +135,7 @@ export default function EntryPage() {
                   spellCheck={false}
                   autoComplete="off"
                   autoCorrect="off"
-                  autoCapitalize="none"
+                  autoCapitalize="off"
                   aria-label="Riot ID"
                 />
                 <div className={styles.inputIcon} aria-hidden="true">
