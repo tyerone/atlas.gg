@@ -272,42 +272,6 @@ async function callAnthropic(contextPacket, retrievedContext) {
   }
 }
 
-// GEMINI API KEY CALL 
-async function callGemini(contextPacket, retrievedContext) {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    return null;
-  }
-
-  try {
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: RAG_SYSTEM_PROMPT }] },
-          contents: [
-            {
-              role: 'user',
-              parts: [{ text: JSON.stringify({ contextPacket, retrievedContext }) }],
-            },
-          ],
-          generationConfig: { maxOutputTokens: 260, temperature: 0.3 },
-        }),
-      },
-    );
-
-    if (!response.ok) return null;
-
-    const data = await response.json();
-    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-    return typeof text === 'string' ? text : null;
-  } catch {
-    return null;
-  }
-}
-
 function readOpenAIContent(content) {
   if (typeof content === 'string') {
     return content;
@@ -395,21 +359,27 @@ export async function generateInsightFromContext({ contextPacket, fallbackText }
   }
 
   const retrievedContext = retrieveCoachingContext(contextPacket, 3);
-  const enrichedPacket = { ...contextPacket, roleBenchmarks: getRoleBenchmark(contextPacket.playerRole) };
+  const benchmark = getRoleBenchmark(contextPacket.playerRole);
+
+  const enrichedPacket = {
+    ...contextPacket,
+    roleBenchmarks: benchmark,
+  };
 
   const anthropicText = await callAnthropic(enrichedPacket, retrievedContext);
-  const geminiText    = anthropicText ? null : await callGemini(enrichedPacket, retrievedContext);
-  const openAiText    = anthropicText || geminiText ? null : await callOpenAI(enrichedPacket, retrievedContext);
-  const llmText       = anthropicText || geminiText || openAiText;
-
+  const openAiText = anthropicText
+    ? null
+    : await callOpenAI(enrichedPacket, retrievedContext);
+  const llmText = anthropicText || openAiText;
   const text = sanitizeGenerated(llmText, fallbackText, retrievedContext);
 
   const result = {
     text,
-    source: anthropicText ? 'anthropic-rag'
-          : geminiText    ? 'gemini-rag'
-          : openAiText    ? 'openai-rag'
-          : 'retrieval-fallback',
+    source: anthropicText
+      ? 'anthropic-rag'
+      : openAiText
+        ? 'openai-rag'
+        : 'retrieval-fallback',
     retrievedContext,
   };
 
