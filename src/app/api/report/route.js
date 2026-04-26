@@ -804,10 +804,12 @@ export async function POST(request) {
       deathClusterGenerated.source,
       deathLoadGenerated.source,
     ];
-
+    
     let ragMode = 'retrieval-fallback';
     if (ragSources.includes('anthropic-rag')) {
       ragMode = 'anthropic-rag';
+    } else if (ragSources.includes('gemini-rag')) {
+      ragMode = 'gemini-rag';
     } else if (ragSources.includes('openai-rag')) {
       ragMode = 'openai-rag';
     }
