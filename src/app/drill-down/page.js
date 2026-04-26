@@ -20,6 +20,17 @@ function GameMap({ snapshot, allGame }) {
   return (
     <svg width="100%" height="100%" viewBox="0 0 300 240" preserveAspectRatio="xMidYMid meet">
       <rect width="300" height="240" fill="#0d1117" />
+      
+      <image 
+        href="/map.png" 
+        x="0" 
+        y="0" 
+        width="300" 
+        height="240" 
+        opacity="0.3" 
+        preserveAspectRatio="none"
+      />
+
       <rect x="8" y="8" width="284" height="224" rx="5" fill="none" stroke="rgba(255,255,255,0.04)" strokeWidth="0.5" />
       {/* River diagonal */}
       <line x1="8" y1="232" x2="292" y2="8" stroke="rgba(79,142,247,0.06)" strokeWidth="10" />
