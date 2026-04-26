@@ -17,6 +17,7 @@ cp .env.example .env.local
 ```
 
 Set `RIOT_API_KEY` in `.env.local`.
+Set `GEMINI_API_KEY` in `.env.local`.
 
 Optional for RAG-generated coaching text:
 
