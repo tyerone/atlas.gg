@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import AtlasLogo from '@/components/AtlasLogo';
 import styles from './drill-down.module.css';
 
@@ -407,7 +407,6 @@ export default function DrillDownPage() {
   const [snapshot, setSnapshot]           = useState(null);
   const [snapshotTs, setSnapshotTs]       = useState('');
 
-  // ── Load data ──────────────────────────────────────────────
   useEffect(() => {
     const stored = sessionStorage.getItem('atlas_riot_id');
     if (stored) setRiotId(stored);
@@ -449,27 +448,15 @@ export default function DrillDownPage() {
         return;
       }
     }
-
-    load();
-    return () => { cancelled = true; };
-  }, [searchParams]);
-
-  // ── Snapshot interaction ───────────────────────────────────
-  const openSnapshot = useCallback((ts) => {
-    if (!game) return;
-    const snap = game.snapshots?.[ts];
-    if (snap) {
-      setSnapshot(snap);
-      setSnapshotTs(ts);
-    }
-  }, [game]);
+  }
 
   function handleCardClick(card) {
-    if (snapshotTs === card.timestamp) {
+    if (snapshot && snapshotTs === card.timestamp) {
       setSnapshot(null);
       setSnapshotTs('');
     } else {
-      openSnapshot(card.timestamp);
+      setSnapshot(card.snapshot);
+      setSnapshotTs(card.timestamp);
     }
   }
 
@@ -477,7 +464,20 @@ export default function DrillDownPage() {
 
   return (
     <div className={styles.page}>
-      <Nav riotId={riotId} />
+
+      {/* ── NAV ── */}
+      <nav className={styles.nav}>
+        <Link href="/" className={styles.navLogo} aria-label="Atlas.gg home">
+          <AtlasLogo width={26} height={23} />
+          <span className={styles.navLogoText}>atlas.<span>gg</span></span>
+        </Link>
+        <ul className={styles.navLinks}>
+          <li><Link href="/">Connect</Link></li>
+          <li><Link href="/matches">Matches</Link></li>
+          <li><Link href="/report" className={styles.active}>Report</Link></li>
+        </ul>
+        <div className={styles.navUser}>{riotId}</div>
+      </nav>
 
       <main className={styles.main}>
 
@@ -642,16 +642,9 @@ export default function DrillDownPage() {
           <div className={styles.snapshotPanel}>
             <div className={styles.snapshotHeader}>
               <span className={styles.snapshotTitle}>Snapshot — {snapshotTs}</span>
-              <button
-                className={styles.snapshotClose}
-                onClick={() => { setSnapshot(null); setSnapshotTs(''); }}
-                type="button"
-              >✕</button>
+              <button className={styles.snapshotClose} onClick={() => { setSnapshot(null); setSnapshotTs(''); }} type="button">✕</button>
             </div>
-            <p className={styles.snapshotText}>
-              {currentCards.find(c => c.timestamp === snapshotTs)?.text
-                || 'No additional context for this timestamp.'}
-            </p>
+            <p className={styles.snapshotText}>{snapshot}</p>
           </div>
         )}
 
